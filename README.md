@@ -55,27 +55,44 @@ EOF
 
 ```
 opkg install dnscrypt-proxy2
-uci add_list dhcp.@dnsmasq[0].server='127.0.0.53'
+/etc/init.d/dnsmasq stop
+uci set dhcp.@dnsmasq[0].noresolv="1"
+uci set dhcp.@dnsmasq[0].localuse="1"
+uci set dhcp.@dnsmasq[0].cachesize="0"
+uci -q delete dhcp.@dnsmasq[0].server
+uci add_list dhcp.@dnsmasq[0].server="127.0.0.53"
+sed -i "32 s/.*/server_names = ['google', 'cloudflare']/" /etc/dnscrypt-proxy2/*.toml
 uci commit dhcp
-```
+sed 's/#server=127.0.0.53/server=127.0.0.53/' /etc/dnsmasq.conf
+/etc/init.d/dnsmasq start
+/etc/init.d/dnscrypt-proxy restart
 
-Edit `/etc/config/dhcp`
+uci set firewall.@redirect.name="Divert-DNS, port 53"
+uci set firewall.@redirect.src="lan"
+uci set firewall.@redirect.dest="lan"
+uci set firewall.@redirect.src_dport="53"
+uci set firewall.@redirect.dest_port="53"
+uci set firewall.@redirect.target="DNAT"
 
-```
-config dnsmasq
-	# Ignore ISP's DNS by not reading upstream servers from /etc/resolv.conf
-	option noresolv '1'
-	# Ensure resolv.conf directs local processes to dnsmasq
-	option localuse '1'
-	# Disable dnsmasq cache as privoxy is more performant
-	option cachesize '0'
+uci set firewall.@redirect.name="Reject-DoT, port 853"
+uci set firewall.@redirect.src="lan"
+uci set firewall.@redirect.dest="wan"
+uci set firewall.@redirect.dest_port="853"
+uci set firewall.@redirect.proto="tcp"
+uci set firewall.@redirect.target="REJECT"
+
+uci set firewall.@redirect.name="Divert-DNS, port 5353"
+uci set firewall.@redirect.src="lan"
+uci set firewall.@redirect.dest="lan"
+uci set firewall.@redirect.src_dport="5353"
+uci set firewall.@redirect.dest_port="53"
+uci set firewall.@redirect.target="DNAT"
 ```
 
 Instruct dnsmasq to use dnscrypt-proxy as its server
 
 
 ```
-sed 's/#server=127.0.0.53/server=127.0.0.53/'
 /etc/init.d/dnsmasq restart
 ```
 
